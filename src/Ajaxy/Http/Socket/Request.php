@@ -257,7 +257,7 @@ class Request
             }
 
             if ($response != '') {
-                $response = new Response($response);
+                $response = new \Ajaxy\Http\Response($response);
             }
 
             return $response == '' ? null : $response;
