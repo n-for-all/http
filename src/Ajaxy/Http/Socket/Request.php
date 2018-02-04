@@ -72,7 +72,7 @@ class Request
         $host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
         $scheme = isset($parsed_url['scheme']) ? $parsed_url['scheme'] : 'tcp';
         if ($scheme == 'http' || $scheme == '') {
-            $scheme = 'tcp';
+            $parsed_url['scheme'] = 'tcp';
         }
         if (!isset($parsed_url['port'])) {
             $parsed_url['port'] = 80;
