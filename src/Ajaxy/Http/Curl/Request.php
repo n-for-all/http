@@ -1,6 +1,6 @@
 <?php
 
-namespace Ajax\Http\Curl;
+namespace Ajaxy\Http\Curl;
 /**
  * Basic CURL wrapper
  *
@@ -176,7 +176,7 @@ class Request {
         $response = curl_exec($this->request);
 
         if ($response) {
-            $response = new Response($response);
+            $response = new \Ajaxy\Http\Response($response);
         } else {
             $this->error = curl_errno($this->request).' - '.curl_error($this->request);
         }
