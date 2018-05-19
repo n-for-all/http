@@ -9,6 +9,7 @@ class Request
      *
      * @var array
      **/
+    public $oendpoint = '';
     public $endpoint = 'tcp://localhost:5000';
 
     /**
@@ -69,15 +70,22 @@ class Request
         if (!$parsed_url) {
             throw new \Exception('Url must be in a valid format');
         }
-        $host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
-        $scheme = isset($parsed_url['scheme']) ? $parsed_url['scheme'] : 'tcp';
-        if ($scheme == 'http' || $scheme == '') {
+        $parsed_url['host'] = isset($parsed_url['host']) && trim($parsed_url['host']) != '' ? $parsed_url['host'] : '127.0.0.1';
+        $scheme = isset($parsed_url['scheme']) && trim($parsed_url['scheme']) != '' ? $parsed_url['scheme'] : 'tcp';
+        if ($scheme == 'https') {
+            $parsed_url['scheme'] = 'tls';
+        }
+        if(!isset($parsed_url['scheme']) || $scheme == 'http' || $scheme == ''){
             $parsed_url['scheme'] = 'tcp';
         }
         if (!isset($parsed_url['port'])) {
             $parsed_url['port'] = 80;
+            if ($scheme == 'https') {
+                $parsed_url['port'] = '443';
+            }
         }
         $this->endpoint = $parsed_url;
+        $this->oendpoint = $endpoint;
         $this->user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : 'Ajaxy/Http PHP.'.PHP_VERSION;
         $this->headers = $headers;
     }
@@ -186,12 +194,16 @@ class Request
         $errno = $errstr = '';
         $type = $this->blocking ? STREAM_CLIENT_CONNECT : STREAM_CLIENT_CONNECT | STREAM_CLIENT_ASYNC_CONNECT;
 
-        $socket = @stream_socket_client($this->endpoint['scheme'].'://'.$this->endpoint['host'].':'.$this->endpoint['port'], $errno, $errstr, 10, $type);
+        $context = stream_context_create();
+        stream_context_set_option($context, 'ssl', 'verify_peer', false);
+
+        $socket = @stream_socket_client($this->endpoint['scheme'].'://'.$this->endpoint['host'].':'.$this->endpoint['port'], $errno, $errstr, 10, $type, $context);
         if ($errno != '') {
-            throw new \Exception($errstr, $errno);
+            if($socket) { @socket_close($socket); }
+            throw new \Exception($errstr.'- Parsed Url: '.($this->endpoint['scheme'].'://'.$this->endpoint['host'].':'.$this->endpoint['port']). " - Original Url: ".$this->oendpoint, $errno);
         }
         if ($socket === false) {
-            throw new \Exception('stream_socket_client() failed', socket_last_error() ? socket_last_error() : 10061);
+            throw new \Exception('stream_socket_client() failed - '. socket_strerror(socket_last_error() ? socket_last_error() : 10061).' - Url: '.($this->endpoint['scheme'].'://'.$this->endpoint['host'].':'.$this->endpoint['port']). " - Original Url: ".$this->oendpoint, socket_last_error() ? socket_last_error() : 10061);
         }
         stream_set_blocking($socket, intval($this->blocking));
         if ($socket) {
@@ -259,7 +271,7 @@ class Request
             if ($response != '') {
                 $response = new \Ajaxy\Http\Response($response);
             }
-
+            @socket_close($socket);
             return $response == '' ? null : $response;
         }
 
