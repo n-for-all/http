@@ -38,7 +38,7 @@ class Request
      *
      * @var string
      **/
-    public $ignore_reponse = false;
+    public $ignore_response = false;
 
     /**
      * Stores an error string for the last request if one occurred.
@@ -247,7 +247,7 @@ class Request
 
             // if response is ignored, then the response will be empty, this allows async request to be sent without any response
             // example sending an email
-            if (!$this->ignore_reponse) {
+            if (!$this->ignore_response) {
                 stream_set_timeout($socket, 10);
                 if (!$this->blocking) {
                     $read = $write = $except = array();
@@ -311,7 +311,7 @@ class Request
      */
     public function setIgnoreResponse($ignore = false)
     {
-        $this->ignore_reponse = $ignore;
+        $this->ignore_response = $ignore;
 
         return $this;
     }
