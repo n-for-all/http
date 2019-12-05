@@ -38,7 +38,7 @@ class Request
      *
      * @var string
      **/
-    public $ignore_response = false;
+    public $ignore_reponse = false;
 
     /**
      * Stores an error string for the last request if one occurred.
@@ -196,8 +196,10 @@ class Request
 
         $context = stream_context_create();
         stream_context_set_option($context, 'ssl', 'verify_peer', false);
+        stream_context_set_option($context, 'ssl', 'verify_host', false);
 
-        $socket = @stream_socket_client($this->endpoint['scheme'].'://'.$this->endpoint['host'].':'.$this->endpoint['port'], $errno, $errstr, 10, $type, $context);
+        $socket = @stream_socket_client($this->endpoint['scheme'].'://'.$this->endpoint['host'].':'.$this->endpoint['port'], $errno, $errstr, 30, $type, $context);
+
         if ($errno != '') {
             if($socket) { @socket_close($socket); }
             throw new \Exception($errstr.'- Parsed Url: '.($this->endpoint['scheme'].'://'.$this->endpoint['host'].':'.$this->endpoint['port']). " - Original Url: ".$this->oendpoint, $errno);
@@ -215,7 +217,7 @@ class Request
                 'Host' => $this->endpoint['host'].':'.$this->endpoint['port'],
                 'Cache-Control' => 'no-cache',
                 'Accept' => '*/*',
-                'Connection' => 'Close',
+                'Connection' => 'close',
                 'Content-Type' => 'application/x-www-form-urlencoded',
             );
             if (strtoupper($method) == 'POST') {
@@ -233,28 +235,47 @@ class Request
             if (trim($content) != '') {
                 $out .= $content;
             }
+
             if (!$this->blocking) {
-                $read = $write = $except = array();
-                $write = array($socket);
-                if (false === ($num_changed_streams = stream_select($read, $write, $except, 1))) {
-                } elseif ($num_changed_streams > 0) {
-                    fputs($socket, $out);
+                while (true) {
+                    $read = $write = $except = array();
+                    $write = array($socket);
+                    if (false === ($num_changed_streams = stream_select($read, $write, $except, 30))) {
+                    } elseif ($num_changed_streams > 0) {
+                        break;
+                    }
                 }
-            } else {
-                fputs($socket, $out);
+                if($this->endpoint['scheme'] == 'tls'){
+                    $crypto_method = STREAM_CRYPTO_METHOD_TLS_CLIENT;
+
+                    if (defined('STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT')) {
+                        $crypto_method |= STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT;
+                        $crypto_method |= STREAM_CRYPTO_METHOD_TLSv1_1_CLIENT;
+                    }
+
+                    stream_set_blocking ($socket, true);
+                    stream_socket_enable_crypto ($socket, true, $crypto_method);
+                    stream_set_blocking ($socket, false);
+                }
             }
+
+            fputs($socket, $out);
+
             $response = '';
 
             // if response is ignored, then the response will be empty, this allows async request to be sent without any response
             // example sending an email
-            if (!$this->ignore_response) {
+            if (!$this->ignore_reponse) {
                 stream_set_timeout($socket, 10);
                 if (!$this->blocking) {
-                    $read = $write = $except = array();
-                    $read = array($socket);
-                    if (false === ($num_changed_streams = stream_select($read, $write, $except, 10))) {
-                    } elseif ($num_changed_streams > 0) {
-                        $response .= stream_socket_recvfrom($socket, 1024);
+                    while (true) {
+                        $read = $write = $except = array();
+                        $read = array($socket);
+                        if (false === ($num_changed_streams = stream_select($read, $write, $except, 10))) {
+                        } elseif ($num_changed_streams > 0) {
+                            $response .= stream_socket_recvfrom($socket, 1024);
+                            break;
+                        }
                     }
                 } else {
                     $i = 1000;
@@ -311,7 +332,7 @@ class Request
      */
     public function setIgnoreResponse($ignore = false)
     {
-        $this->ignore_response = $ignore;
+        $this->ignore_reponse = $ignore;
 
         return $this;
     }
