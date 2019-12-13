@@ -36,25 +36,22 @@ class Response implements \JsonSerializable
     public function __construct($response)
     {
         // Headers regex
-        $pattern = '#HTTP/\d\.\d.*?$.*?\r\n\r\n#ims';
+        $pattern = '#HTTP/(\d\.\d|\d).*?$.*?#ims';
 
         // Extract headers from response
         preg_match_all($pattern, $response, $matches);
 
-        $headers_string = array_pop($matches[0]);
-        $headers = explode("\r\n", str_replace("\r\n\r\n", '', $headers_string));
+        list($headers, $body) = explode("\r\n\r\n", $response, 2);
+
+        $headers_string = trim(preg_replace($pattern, '', $headers));
+        $parsedHeaders = $this->parseHeaders($headers_string);
 
         // Remove headers from the response body
 
-        $this->body = str_replace($headers_string, '', $response);
+        $this->body = trim(str_replace($headers, '', $response));
 
-        if (isset($matches[0])) {
-            $_headers_string = array_pop($matches[0]);
-            $this->body = str_replace($_headers_string, '', $this->body);
-        }
         // Extract the version and status from the first header
-        $version_and_status = array_shift($headers);
-        preg_match('#HTTP/(\d\.\d)\s(\d\d\d)\s(.*)#', $version_and_status, $matches);
+        preg_match('#HTTP/(\d\.\d|\d)\s(\d\d\d)\s(.*)#', $response, $matches);
         if($matches && count($matches) >= 3){
             $this->headers['httpVersion'] = $matches[1];
             $this->headers['statusCode'] = $matches[2];
@@ -62,12 +59,7 @@ class Response implements \JsonSerializable
         }
 
         // Convert headers into an associative array
-        foreach ($headers as $header) {
-            preg_match('#(.*?)\:\s(.*)#', $header, $matches);
-            if($matches && count($matches) >= 2){
-                $this->headers[$matches[1]] = $matches[2];
-            }
-        }
+        $this->headers = $parsedHeaders;
     }
 
     /**
@@ -133,5 +125,40 @@ class Response implements \JsonSerializable
     public function jsonSerialize()
     {
         return array('headers' => $this->headers, 'body' => $this->body);
+    }
+
+    /**
+     * Parse http headers.
+     *
+     * @since  1.0.3
+     * @date   2019-12-10
+     *
+     * @return array of headers and body
+     */
+    public function parseHeaders( $headers ) {
+        if( function_exists( 'http_parse_headers' ) ) {
+            return \http_parse_headers($headers);
+        }
+        $retVal = array();
+        $fields = explode("\r\n", preg_replace('/\x0D\x0A[\x09\x20]+/', ' ', $headers));
+        foreach( $fields as $field ) {
+            if( preg_match('/([^:]+): (.+)/m', $field, $match) && $field != '') {
+                $match[1] = preg_replace_callback('/(?<=^|[\x09\x20\x2D])./', function($matches) {return strtoupper($matches[0]);}, strtolower(trim($match[1])));
+                if( isset($retVal[$match[1]]) ) {
+                    if ( is_array( $retVal[$match[1]] ) ) {
+                        $i = count($retVal[$match[1]]);
+                        $retVal[$match[1]][$i] = $match[2];
+                    }
+                    else {
+                        $retVal[$match[1]] = array($retVal[$match[1]], $match[2]);
+                    }
+                } else {
+                    $retVal[$match[1]] = trim($match[2]);
+                }
+            }else{
+                break;
+            }
+        }
+        return $retVal;
     }
 }
