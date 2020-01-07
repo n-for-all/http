@@ -49,17 +49,18 @@ class Response implements \JsonSerializable
         // Remove headers from the response body
 
         $this->body = trim(str_replace($headers, '', $response));
+        // Convert headers into an associative array
+        $this->headers = $parsedHeaders;
 
         // Extract the version and status from the first header
         preg_match('#HTTP/(\d\.\d|\d)\s(\d\d\d)\s(.*)#', $response, $matches);
+
         if($matches && count($matches) >= 3){
             $this->headers['httpVersion'] = $matches[1];
             $this->headers['statusCode'] = $matches[2];
             $this->headers['status'] = $matches[2].' '.$matches[3];
         }
 
-        // Convert headers into an associative array
-        $this->headers = $parsedHeaders;
     }
 
     /**
@@ -111,7 +112,7 @@ class Response implements \JsonSerializable
      */
     public function getStatusCode()
     {
-        return $this->headers['statusCode'];
+        return isset($this->headers['statusCode']) ? $this->headers['statusCode']: 500;
     }
 
     /**

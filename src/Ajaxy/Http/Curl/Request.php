@@ -39,6 +39,13 @@ class Request {
     public $referer;
 
     /**
+     * Curl verbose mode
+     *
+     * @var string
+    **/
+    public $verbose;
+
+    /**
      * The user agent to send along with requests
      *
      * @var string
@@ -223,6 +230,101 @@ class Request {
     }
 
     /**
+     * Get the value of Follow Redirects
+     *
+     * @return mixed
+     */
+    public function getFollowRedirects()
+    {
+        return $this->follow_redirects;
+    }
+
+    /**
+     * Set the value of Follow Redirects
+     *
+     * @param mixed $follow_redirects
+     *
+     * @return self
+     */
+    public function setFollowRedirects($follow_redirects)
+    {
+        $this->follow_redirects = $follow_redirects;
+
+        return $this;
+    }
+
+    /**
+     * Get the value of Referer
+     *
+     * @return mixed
+     */
+    public function getReferer()
+    {
+        return $this->referer;
+    }
+
+    /**
+     * Set the value of Referer
+     *
+     * @param mixed $referer
+     *
+     * @return self
+     */
+    public function setReferer($referer)
+    {
+        $this->referer = $referer;
+
+        return $this;
+    }
+
+    /**
+     * Get the value of User Agent
+     *
+     * @return mixed
+     */
+    public function getUserAgent()
+    {
+        return $this->user_agent;
+    }
+
+    /**
+     * Set the value of User Agent
+     *
+     * @param mixed $user_agent
+     *
+     * @return self
+     */
+    public function setUserAgent($user_agent)
+    {
+        $this->user_agent = $user_agent;
+
+        return $this;
+    }
+
+    /**
+     * Get the value of Cookie File
+     *
+     * @return mixed
+     */
+    public function getCookieFile()
+    {
+        return $this->cookie_file;
+    }
+
+    /**
+     * Set the value of Cookie File
+     *
+     * @param mixed $cookie_file
+     *
+     * @return self
+     */
+    public function setCookieFile($cookie_file)
+    {
+        $this->cookie_file = $cookie_file;
+
+        return $this;
+    }
+    /**
      * Sets the CURLOPT options for the current request
      *
      * @param string $url
@@ -240,7 +342,9 @@ class Request {
         curl_setopt($this->request, CURLOPT_HEADER, true);
         curl_setopt($this->request, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($this->request, CURLOPT_USERAGENT, $this->user_agent);
-        // curl_setopt($this->request, CURLOPT_VERBOSE, true);
+        if ($this->verbose) {
+            curl_setopt($this->request, CURLOPT_VERBOSE, true);
+        }
         if ($this->cookie_file) {
             curl_setopt($this->request, CURLOPT_COOKIEFILE, $this->cookie_file);
             curl_setopt($this->request, CURLOPT_COOKIEJAR, $this->cookie_file);
@@ -253,5 +357,4 @@ class Request {
             curl_setopt($this->request, constant('CURLOPT_'.str_replace('CURLOPT_', '', strtoupper($option))), $value);
         }
     }
-
 }
