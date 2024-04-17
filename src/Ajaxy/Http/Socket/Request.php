@@ -73,9 +73,9 @@ class Request
         $parsed_url['host'] = isset($parsed_url['host']) && trim($parsed_url['host']) != '' ? $parsed_url['host'] : '127.0.0.1';
         $scheme = isset($parsed_url['scheme']) && trim($parsed_url['scheme']) != '' ? $parsed_url['scheme'] : 'tcp';
         if ($scheme == 'https') {
-            $parsed_url['scheme'] = 'tls';
+            $parsed_url['scheme'] = 'ssl';
         }
-        if(!isset($parsed_url['scheme']) || $scheme == 'http' || $scheme == ''){
+        if (!isset($parsed_url['scheme']) || $scheme == 'http' || $scheme == '') {
             $parsed_url['scheme'] = 'tcp';
         }
         if (!isset($parsed_url['port'])) {
@@ -86,7 +86,7 @@ class Request
         }
         $this->endpoint = $parsed_url;
         $this->oendpoint = $endpoint;
-        $this->user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : 'Ajaxy/Http PHP.'.PHP_VERSION;
+        $this->user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : 'Ajaxy/Http PHP.' . PHP_VERSION;
         $this->headers = $headers;
     }
 
@@ -196,19 +196,23 @@ class Request
 
         $context = stream_context_create();
 
+        stream_context_set_option($context, 'ssl', 'capture_peer_cert', true);
         stream_context_set_option($context, 'ssl', 'verify_peer', false);
         stream_context_set_option($context, 'ssl', 'verify_host', false);
         stream_context_set_option($context, 'ssl', 'allow_self_signed', true);
 
-        $socket = @stream_socket_client($this->endpoint['scheme'].'://'.$this->endpoint['host'].':'.$this->endpoint['port'], $errno, $errstr, 30, $type, $context);
-
-        if ($errno != '') {
-            if($socket) { @socket_close($socket); }
-            throw new \Exception($errstr.'- Parsed Url: '.($this->endpoint['scheme'].'://'.$this->endpoint['host'].':'.$this->endpoint['port']). " - Original Url: ".$this->oendpoint, $errno);
-        }
+        $socket = @stream_socket_client($this->endpoint['scheme'] . '://' . $this->endpoint['host'] . ':' . $this->endpoint['port'], $errno, $errstr, 30, $type, $context);
         if ($socket === false) {
-            throw new \Exception('stream_socket_client() failed - '. socket_strerror(socket_last_error() ? socket_last_error() : 10061).' - Url: '.($this->endpoint['scheme'].'://'.$this->endpoint['host'].':'.$this->endpoint['port']). " - Original Url: ".$this->oendpoint, socket_last_error() ? socket_last_error() : 10061);
+            throw new \Exception('stream_socket_client() failed - ' . socket_strerror(socket_last_error() ? socket_last_error() : 10061) . ' - Url: ' . ($this->endpoint['scheme'] . '://' . $this->endpoint['host'] . ':' . $this->endpoint['port']) . " - Original Url: " . $this->oendpoint, socket_last_error() ? socket_last_error() : 10061);
         }
+
+        if ($errno && $errno != '') {
+            if ($socket) {
+                stream_socket_shutdown($socket, STREAM_SHUT_RDWR);
+            }
+            throw new \Exception(\sprintf('Error %s - %s - Parsed Url: %s - Original Url: %s', $errno, $errstr, $this->endpoint['scheme'] . '://' . $this->endpoint['host'] . ':' . $this->endpoint['port'], $this->oendpoint), $errno);
+        }
+        
         stream_set_blocking($socket, intval($this->blocking));
         if ($socket) {
             $content = '';
@@ -216,7 +220,7 @@ class Request
                 $content = http_build_query($vars, '', '&');
             }
             $headers = array(
-                'Host' => $this->endpoint['host'].':'.$this->endpoint['port'],
+                'Host' => $this->endpoint['host'] . ':' . $this->endpoint['port'],
                 'Cache-Control' => 'no-cache',
                 'Accept' => '*/*',
                 'Content-Type' => 'application/x-www-form-urlencoded',
@@ -230,26 +234,26 @@ class Request
             $out = "{$method} {$path} HTTP/1.1\r\n";
 
             foreach ($headers as $key => $header) {
-                $out .= $key.': '.$header."\r\n";
+                $out .= $key . ': ' . $header . "\r\n";
             }
             $out .= "\r\n";
             if (trim($content) != '') {
                 $out .= $content;
             }
 
-                while (true) {
-                    $read = $write = $except = array();
-                    $write = array($socket);
-                    if (false === ($num_changed_streams = stream_select($read, $write, $except, 30))) {
-                    } elseif ($num_changed_streams > 0) {
-                        fputs($socket, $out);
-                        break;
-                    }
+            while (true) {
+                $read = $write = $except = array();
+                $write = array($socket);
+                if (false === ($num_changed_streams = stream_select($read, $write, $except, 30))) {
+                } elseif ($num_changed_streams > 0) {
+                    fputs($socket, $out);
+                    break;
                 }
+            }
 
-            if($this->ignore_response){
+            if ($this->ignore_response) {
                 sleep(1);
-                @socket_close($socket);
+                @fclose($socket);
                 return null;
             }
             $response = '';
@@ -279,7 +283,9 @@ class Request
             if ($response != '') {
                 $response = new \Ajaxy\Http\Response($response);
             }
-            @socket_close($socket);
+            if ($socket) {
+                fclose($socket);
+            }
             return $response == '' ? null : $response;
         }
 
